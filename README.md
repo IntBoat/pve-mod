@@ -9,6 +9,8 @@
 
 相容性：Proxmox VE **9.0–9.2**（以 9.2.5 驗證）。
 
+![Node Summary with CPU Temperature and Fan Speed](docs/summary-sensors.png)
+
 ---
 
 ## 架構

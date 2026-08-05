@@ -1,0 +1,8 @@
+[Unit]
+Description=Update Proxmox CPU temperature and fan speed RRDs
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pve-sensors-update
+Nice=10

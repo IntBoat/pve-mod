@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Sample CPU Package temperature and fan RPM into independent RRDs.
+set -euo pipefail
+
+NODE="$(hostname -s)"
+SOCKET="/var/run/rrdcached.sock"
+CPU_DIR="/var/lib/rrdcached/db/pve-mod-cputemp"
+FAN_DIR="/var/lib/rrdcached/db/pve-mod-fanspeed"
+CPU_RRD="${CPU_DIR}/${NODE}"
+FAN_RRD="${FAN_DIR}/${NODE}"
+
+mkdir -p "${CPU_DIR}" "${FAN_DIR}"
+
+# Ensure ITE Super-IO fan sensors (IT8613E via it87 force_id)
+if ! ls /sys/class/hwmon/hwmon*/fan*_input >/dev/null 2>&1; then
+    modprobe it87 force_id=0x8628 2>/dev/null || true
+fi
+
+create_rrd() {
+    local path="$1"
+    local ds="$2"
+    local max="$3"
+    if [[ -f "${path}" ]]; then
+        return 0
+    fi
+    local start="$(( $(date +%s) - 120 ))"
+    rrdtool create "${path}" \
+        --start "${start}" \
+        --step 60 \
+        "DS:${ds}:GAUGE:120:0:${max}" \
+        "RRA:AVERAGE:0.5:1:1440" \
+        "RRA:AVERAGE:0.5:30:1440" \
+        "RRA:AVERAGE:0.5:360:1440" \
+        "RRA:AVERAGE:0.5:10080:570" \
+        "RRA:MAX:0.5:1:1440" \
+        "RRA:MAX:0.5:30:1440" \
+        "RRA:MAX:0.5:360:1440" \
+        "RRA:MAX:0.5:10080:570"
+}
+
+rrd_update() {
+    local path="$1"
+    local value="$2"
+    if [[ -S "${SOCKET}" ]]; then
+        rrdtool update --daemon "unix:${SOCKET}" "${path}" "N:${value}"
+    else
+        rrdtool update "${path}" "N:${value}"
+    fi
+}
+
+create_rrd "${CPU_RRD}" "cputemp" "150"
+create_rrd "${FAN_RRD}" "fanspeed" "12000"
+
+read -r TEMP FAN <<EOF
+$(
+    python3 - <<'PY'
+import json, subprocess, sys
+
+temp = None
+fan = None
+try:
+    data = json.loads(subprocess.check_output(["sensors", "-j"], stderr=subprocess.DEVNULL, text=True))
+except Exception:
+    data = {}
+
+def input_temp(entry):
+    if not isinstance(entry, dict):
+        return None
+    if "temp1_input" in entry and isinstance(entry["temp1_input"], (int, float)):
+        return float(entry["temp1_input"])
+    for subkey, value in entry.items():
+        if subkey.endswith("_input") and isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+for chip, payload in data.items():
+    if not isinstance(payload, dict):
+        continue
+    if temp is None and any(x in chip for x in ("coretemp", "k10temp", "zenpower")):
+        for key in ("Package id 0", "Tctl", "Tdie"):
+            value = input_temp(payload.get(key))
+            if value is not None:
+                temp = value
+                break
+        if temp is None:
+            for entry in payload.values():
+                value = input_temp(entry)
+                if value is not None:
+                    temp = value
+                    break
+    # Collect max fan RPM from any chip
+    for label, entry in payload.items():
+        if not isinstance(entry, dict):
+            continue
+        for subkey, value in entry.items():
+            if subkey.startswith("fan") and subkey.endswith("_input") and isinstance(value, (int, float)):
+                if value > 0 and (fan is None or value > fan):
+                    fan = float(value)
+
+# Fallback: read hwmon fan*_input directly
+if fan is None:
+    import glob
+    for path in sorted(glob.glob("/sys/class/hwmon/hwmon*/fan*_input")):
+        try:
+            value = float(open(path).read().strip())
+        except Exception:
+            continue
+        if value > 0 and (fan is None or value > fan):
+            fan = value
+
+temp_s = f"{temp:.2f}" if temp is not None else ""
+fan_s = f"{fan:.0f}" if fan is not None else ""
+print(f"{temp_s} {fan_s}")
+PY
+)
+EOF
+
+if [[ -n "${TEMP}" ]]; then
+    rrd_update "${CPU_RRD}" "${TEMP}" || true
+fi
+if [[ -n "${FAN}" ]]; then
+    rrd_update "${FAN_RRD}" "${FAN}" || true
+fi

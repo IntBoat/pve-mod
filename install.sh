@@ -54,6 +54,9 @@ python3 "${SCRIPT_DIR}/patches/apply-patches.py"
 echo "[pve-mod] Applying fan speed patches..."
 python3 "${SCRIPT_DIR}/patches/apply-fan-patches.py"
 
+echo "[pve-mod] Hiding Boot Mode / Manager Version for layout..."
+python3 "${SCRIPT_DIR}/patches/hide-boot-manager.py"
+
 perl -c "${NODES_PM}"
 
 echo "[pve-mod] Restarting pveproxy/pvedaemon..."

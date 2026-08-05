@@ -240,17 +240,25 @@ def patch_js(text: str) -> str:
             1,
         )
 
-    # Bump height further
-    if "height: 380, // PVE_CPUTEMP_MOD" in text:
+    # Keep height for CPU temp + fan (Boot Mode / Manager Version already removed)
+    if "height: 360, // PVE_CPUTEMP_MOD" in text and MARKER not in text[
+        text.find("height: 360, // PVE_CPUTEMP_MOD") : text.find("height: 360, // PVE_CPUTEMP_MOD") + 80
+    ]:
         text = text.replace(
-            "height: 380, // PVE_CPUTEMP_MOD",
-            f"height: 410, // PVE_CPUTEMP_MOD {MARKER}",
+            "height: 360, // PVE_CPUTEMP_MOD",
+            f"height: 360, // PVE_CPUTEMP_MOD {MARKER}",
             1,
         )
-    elif "height: 350," in text and "widget.pveNodeStatus" in text:
+    elif "height: 380, // PVE_CPUTEMP_MOD" in text:
         text = text.replace(
-            "    alias: 'widget.pveNodeStatus',\n\n    height: 350,",
-            f"    alias: 'widget.pveNodeStatus',\n\n    height: 410, // {MARKER}",
+            "height: 380, // PVE_CPUTEMP_MOD",
+            f"height: 360, // PVE_CPUTEMP_MOD {MARKER}",
+            1,
+        )
+    elif "height: 410, // PVE_CPUTEMP_MOD" in text:
+        text = text.replace(
+            "height: 410, // PVE_CPUTEMP_MOD",
+            f"height: 360, // PVE_CPUTEMP_MOD {MARKER}",
             1,
         )
 

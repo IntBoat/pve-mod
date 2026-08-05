@@ -190,7 +190,23 @@ def patch_js(text: str) -> str:
         raise RuntimeError("pvemanagerlib.js: pve-rrd-node model not found")
     text = text.replace(model_anchor, MODEL_BLOCK + model_anchor, 1)
 
-    version_anchor = """        {
+    # Remove Boot Mode + Manager Version (layout), insert CPU temp after Kernel Version
+    boot_and_version = """        {
+            colspan: 2,
+            title: gettext('Boot Mode'),
+            printBar: false,
+            textField: 'boot-info',
+            renderer: (boot) => {
+                if (boot.mode === 'legacy-bios') {
+                    return 'Legacy BIOS';
+                } else if (boot.mode === 'efi') {
+                    return `EFI${boot.secureboot ? ' (Secure Boot)' : ''}`;
+                }
+                return Proxmox.Utils.unknownText;
+            },
+            value: '',
+        },
+        {
             itemId: 'version',
             colspan: 2,
             printBar: false,
@@ -206,21 +222,23 @@ def patch_js(text: str) -> str:
         me.setTitle(me.pveSelNode.data.node + ' (' + gettext('Uptime') + ': ' + uptime + ')');
     },
 """
-    if version_anchor not in text:
-        raise RuntimeError("pvemanagerlib.js: StatusView version item not found")
+    if boot_and_version not in text:
+        raise RuntimeError("pvemanagerlib.js: Boot Mode / Manager Version block not found")
     text = text.replace(
-        version_anchor,
-        version_anchor.replace(
-            "        },\n    ],\n\n    updateTitle:",
-            "        },\n" + STATUS_WIDGET + "    ],\n\n    updateTitle:",
-            1,
-        ),
+        boot_and_version,
+        "        // PVE_HIDE_BOOT_MANAGER: removed Boot Mode + Manager Version for layout\n"
+        + STATUS_WIDGET
+        + "    ],\n\n"
+        "    updateTitle: function () {\n"
+        "        var me = this;\n"
+        "        var uptime = Proxmox.Utils.render_uptime(me.getRecordValue('uptime'));\n"
+        "        me.setTitle(me.pveSelNode.data.node + ' (' + gettext('Uptime') + ': ' + uptime + ')');\n"
+        "    },\n",
         1,
     )
 
-    # Bump StatusView height slightly for the extra row
     old_height = "    alias: 'widget.pveNodeStatus',\n\n    height: 350,"
-    new_height = f"    alias: 'widget.pveNodeStatus',\n\n    height: 380, // {MARKER}"
+    new_height = f"    alias: 'widget.pveNodeStatus',\n\n    height: 360, // {MARKER}"
     if old_height not in text:
         raise RuntimeError("pvemanagerlib.js: pveNodeStatus height not found")
     text = text.replace(old_height, new_height, 1)

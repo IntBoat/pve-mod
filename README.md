@@ -65,6 +65,7 @@ bash uninstall.sh
 | `systemd/` | timer + oneshot service |
 | `patches/apply-patches.py` | CPU 溫度：patch `Nodes.pm` + `pvemanagerlib.js` |
 | `patches/apply-fan-patches.py` | 風扇速度：同上 |
+| `patches/hide-boot-manager.py` | 隱藏 Boot Mode / Manager Version（版面對齊） |
 | `modprobe/it87-fans.conf` | ITE IT8613E → `it87 force_id=0x8628` |
 | `docs/DESIGN.md` | 修改細節與標記說明 |
 

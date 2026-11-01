@@ -19,6 +19,7 @@ rm -f /etc/systemd/system/pve-cputemp-update.timer
 rm -f /etc/systemd/system/pve-cputemp-update.service
 rm -f /usr/local/sbin/pve-sensors-update
 rm -f /usr/local/sbin/pve-cputemp-update
+rm -f /usr/local/sbin/pve_sensors_parse.py
 systemctl daemon-reload
 
 if [[ -f "${BACKUP_DIR}/Nodes.pm.orig" ]]; then

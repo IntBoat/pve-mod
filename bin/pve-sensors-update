@@ -8,6 +8,8 @@ CPU_DIR="/var/lib/rrdcached/db/pve-mod-cputemp"
 FAN_DIR="/var/lib/rrdcached/db/pve-mod-fanspeed"
 CPU_RRD="${CPU_DIR}/${NODE}"
 FAN_RRD="${FAN_DIR}/${NODE}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PARSE_PY="${SCRIPT_DIR}/pve_sensors_parse.py"
 
 mkdir -p "${CPU_DIR}" "${FAN_DIR}"
 
@@ -52,67 +54,7 @@ create_rrd "${CPU_RRD}" "cputemp" "150"
 create_rrd "${FAN_RRD}" "fanspeed" "12000"
 
 read -r TEMP FAN <<EOF
-$(
-    python3 - <<'PY'
-import json, subprocess, sys
-
-temp = None
-fan = None
-try:
-    data = json.loads(subprocess.check_output(["sensors", "-j"], stderr=subprocess.DEVNULL, text=True))
-except Exception:
-    data = {}
-
-def input_temp(entry):
-    if not isinstance(entry, dict):
-        return None
-    if "temp1_input" in entry and isinstance(entry["temp1_input"], (int, float)):
-        return float(entry["temp1_input"])
-    for subkey, value in entry.items():
-        if subkey.endswith("_input") and isinstance(value, (int, float)):
-            return float(value)
-    return None
-
-for chip, payload in data.items():
-    if not isinstance(payload, dict):
-        continue
-    if temp is None and any(x in chip for x in ("coretemp", "k10temp", "zenpower")):
-        for key in ("Package id 0", "Tctl", "Tdie"):
-            value = input_temp(payload.get(key))
-            if value is not None:
-                temp = value
-                break
-        if temp is None:
-            for entry in payload.values():
-                value = input_temp(entry)
-                if value is not None:
-                    temp = value
-                    break
-    # Collect max fan RPM from any chip
-    for label, entry in payload.items():
-        if not isinstance(entry, dict):
-            continue
-        for subkey, value in entry.items():
-            if subkey.startswith("fan") and subkey.endswith("_input") and isinstance(value, (int, float)):
-                if value > 0 and (fan is None or value > fan):
-                    fan = float(value)
-
-# Fallback: read hwmon fan*_input directly
-if fan is None:
-    import glob
-    for path in sorted(glob.glob("/sys/class/hwmon/hwmon*/fan*_input")):
-        try:
-            value = float(open(path).read().strip())
-        except Exception:
-            continue
-        if value > 0 and (fan is None or value > fan):
-            fan = value
-
-temp_s = f"{temp:.2f}" if temp is not None else ""
-fan_s = f"{fan:.0f}" if fan is not None else ""
-print(f"{temp_s} {fan_s}")
-PY
-)
+$(python3 "${PARSE_PY}")
 EOF
 
 if [[ -n "${TEMP}" ]]; then

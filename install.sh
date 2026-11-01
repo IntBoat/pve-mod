@@ -22,6 +22,7 @@ modprobe it87 force_id=0x8628 2>/dev/null || true
 
 echo "[pve-mod] Installing collector..."
 install -m 0755 "${SCRIPT_DIR}/bin/pve-sensors-update" /usr/local/sbin/pve-sensors-update
+install -m 0644 "${SCRIPT_DIR}/bin/pve_sensors_parse.py" /usr/local/sbin/pve_sensors_parse.py
 # Compat symlink for earlier deployments
 ln -sfn /usr/local/sbin/pve-sensors-update /usr/local/sbin/pve-cputemp-update
 install -m 0644 "${SCRIPT_DIR}/systemd/pve-sensors-update.service" /etc/systemd/system/pve-sensors-update.service
@@ -39,10 +40,12 @@ systemctl daemon-reload
 systemctl enable --now pve-sensors-update.timer
 
 echo "[pve-mod] Backing up PVE files..."
-if [[ ! -f "${BACKUP_DIR}/Nodes.pm.orig" ]] && ! grep -qE 'PVE_CPUTEMP_MOD|PVE_FANSPEED_MOD' "${NODES_PM}"; then
+# Refresh .orig whenever the live file is unpatched (covers pve-manager upgrades).
+# Keeping a stale .orig from an older package would make uninstall restore the wrong version.
+if ! grep -qE 'PVE_CPUTEMP_MOD|PVE_FANSPEED_MOD' "${NODES_PM}"; then
     cp -a "${NODES_PM}" "${BACKUP_DIR}/Nodes.pm.orig"
 fi
-if [[ ! -f "${BACKUP_DIR}/pvemanagerlib.js.orig" ]] && ! grep -qE 'PVE_CPUTEMP_MOD|PVE_FANSPEED_MOD' "${PVE_JS}"; then
+if ! grep -qE 'PVE_CPUTEMP_MOD|PVE_FANSPEED_MOD' "${PVE_JS}"; then
     cp -a "${PVE_JS}" "${BACKUP_DIR}/pvemanagerlib.js.orig"
 fi
 cp -a "${NODES_PM}" "${BACKUP_DIR}/Nodes.pm.${STAMP}"

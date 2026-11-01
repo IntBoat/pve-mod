@@ -360,8 +360,11 @@ def main() -> int:
         print("Fan patches already applied.")
         return 0
 
-    NODES.write_text(patch_nodes(nodes))
-    JS.write_text(patch_js(js))
+    # Validate both transforms before writing either file (avoid partial apply).
+    new_nodes = patch_nodes(nodes)
+    new_js = patch_js(js)
+    NODES.write_text(new_nodes)
+    JS.write_text(new_js)
     print("Patched Nodes.pm and pvemanagerlib.js for fan speed")
     return 0
 
